@@ -1,4 +1,5 @@
 import numpy as np
+import time
 import torch
 from torch import optim
 from torch.nn import functional
@@ -95,7 +96,7 @@ class CTGANSynthesizer(object):
 
         return (loss * m).sum() / data.size()[0]
 
-    def fit(self, train_data, discrete_columns=tuple(), epochs=300, log_frequency=True):
+    def fit(self, train_data, discrete_columns=tuple(), epochs=300, log_frequency=True, w_sampling=False):
         """Fit the CTGAN Synthesizer models to the training data.
 
         Args:
@@ -113,11 +114,18 @@ class CTGANSynthesizer(object):
                 Whether to use log frequency of categorical levels in conditional
                 sampling. Defaults to ``True``.
         """
-
+        
+        start = time.time()
         self.transformer = DataTransformer()
-        self.transformer.fit(train_data, discrete_columns)
+        self.transformer.fit(train_data, discrete_columns, w_sampling)
+        end = time.time()
+        print("Time in fitting variables: {}".format(end - start))
+        start = time.time()
         train_data = self.transformer.transform(train_data)
+        end = time.time()
+        print("Time in transforming variables: {}".format(end - start))
 
+        start = time.time()
         data_sampler = Sampler(train_data, self.transformer.output_info)
 
         data_dim = self.transformer.output_dimensions
@@ -149,6 +157,9 @@ class CTGANSynthesizer(object):
         std = mean + 1
 
         steps_per_epoch = max(len(train_data) // self.batch_size, 1)
+        end = time.time()
+        print("Time in preparing training: {}".format(end - start))
+        start = time.time()
         for i in range(epochs):
             for id_ in range(steps_per_epoch):
                 fakez = torch.normal(mean=mean, std=std)
@@ -224,6 +235,8 @@ class CTGANSynthesizer(object):
             print("Epoch %d, Loss G: %.4f, Loss D: %.4f" %
                   (i + 1, loss_g.detach().cpu(), loss_d.detach().cpu()),
                   flush=True)
+        end = time.time()
+        print("Time in training: {}".format(end - start))
 
     def sample(self, n):
         """Sample data similar to the training data.

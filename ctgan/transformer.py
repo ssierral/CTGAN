@@ -56,7 +56,7 @@ class DataTransformer(object):
             'output_dimensions': categories
         }
 
-    def fit(self, data, discrete_columns=tuple()):
+    def fit(self, data, discrete_columns=tuple(), w_sampling=False):
         self.output_info = []
         self.output_dimensions = 0
 
@@ -66,14 +66,23 @@ class DataTransformer(object):
         else:
             self.dataframe = True
 
-        self.dtypes = data.infer_objects().dtypes
         self.meta = []
         for column in data.columns:
             column_data = data[[column]].values
             if column in discrete_columns:
                 meta = self._fit_discrete(column, column_data)
             else:
-                meta = self._fit_continuous(column, column_data)
+                if w_sampling:
+                    z_score = 2.33
+                    error_margin = 0.02
+                    n = ((z_score**2)*(0.5**2))/(error_margin**2)
+                    n_prime = n/(1 + (((z_score**2)*(0.5**2))/((error_margin**2)*len(column_data))))
+                    n_prime = int(n_prime + 1)
+                    idx = np.random.choice(np.arange(len(column_data)), n_prime)
+                    sampled_column_data = column_data[idx]
+                    meta = self._fit_continuous(column, sampled_column_data)
+                else:
+                    meta = self._fit_continuous(column, column_data)
 
             self.output_info += meta['output_info']
             self.output_dimensions += meta['output_dimensions']
@@ -171,8 +180,7 @@ class DataTransformer(object):
             start += dimensions
 
         output = np.column_stack(output)
-        output = pd.DataFrame(output, columns=column_names).astype(self.dtypes)
-        if not self.dataframe:
-            output = output.values
+        if self.dataframe:
+            output = pd.DataFrame(output, columns=column_names)
 
         return output
